@@ -1,2 +1,44 @@
-# Ignore the generated output directory
+# --- Python ---
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# --- Saída do fet-cl (diretórios gerados por --outputdir / --keep-output) ---
 out/
+out_*/
+*_out/
+
+# --- Artefatos gerados pelo fet-cl direto na raiz (fora de out/) ---
+*_activities.xml
+*_data_and_timetable.fet
+*_subgroups.xml
+*_teachers.xml
+*_soft_conflicts.txt
+*_index.html
+*_stylesheet.css
+*_students_statistics.html
+*_teachers_statistics.html
+logs/
+
+# --- Visualizações geradas localmente pelos scripts (regeneráveis) ---
+# Nomes de saída padrão dos scripts. Se você usar -o com outro nome,
+# adicione o padrão aqui -- os HTMLs de referência do kit (exemplo_*.html)
+# continuam versionados por causa da negação abaixo.
+grade.html
+entrada.html
+!exemplo_*.html
+
+# --- Build local do FET (Opção A / Linux/WSL) ---
+fet-src/
+fet-cl
+
+# --- Docker ---
+*.log
+
+# --- OS / editor ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

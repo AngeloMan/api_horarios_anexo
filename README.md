@@ -44,8 +44,10 @@ docker run --rm -v "${PWD}:/data" --entrypoint python3 fet-cl-test `
 |---|---|
 | `Dockerfile` | Build multi-stage do `fet-cl` (sem GUI); imagem final com Qt Core + Python 3 |
 | `test_fet_pipeline.py` | Smoke test: executa `fet-cl`, parseia o resultado e o diagnóstico de conflitos |
-| `visualize_timetable.py` | Gera visualização HTML da grade a partir do `.fet` + saída do `fet-cl` |
-| `exemplo_grade_Brazil.html` | Visualização de referência, gerada a partir do `Brazil.fet` |
+| `visualize_timetable.py` | Visualização HTML da grade gerada, a partir do `.fet` + saída do `fet-cl` |
+| `visualize_input.py` | Visualização HTML dos dados de entrada do `.fet` (currículo, carga horária, disponibilidade) |
+| `exemplo_grade_Brazil.html` | Visualização de referência da grade gerada |
+| `exemplo_entrada_Brazil.html` | Visualização de referência dos dados de entrada |
 | `Brazil.fet` | Dataset de teste |
 
 ## `test_fet_pipeline.py`
@@ -88,6 +90,23 @@ Gera um HTML autocontido (sem dependências externas) com duas visões:
 Também aceita o `*_data_and_timetable.fet` (saída do `fet-cl` com o
 horário embutido) no lugar do `activities.xml`.
 
+## `visualize_input.py`
+
+```bash
+python3 visualize_input.py Brazil.fet -o entrada.html
+```
+
+Visualiza os dados **de entrada** do `.fet` — não depende de nenhuma
+geração prévia, só do próprio arquivo. Útil para revisar o dataset antes
+de gastar tempo de geração com ele. Duas visões:
+
+- **Por turma** — currículo (disciplina, professor, carga semanal) e
+  tabela comparativa de todas as turmas
+- **Por professor** — carga horária (disciplina, turma, carga semanal),
+  restrições declaradas (máx. dias/semana, meta de horas) e a grade de
+  disponibilidade (`ConstraintTeacherNotAvailableTimes`), sem nenhuma
+  aula marcada — só disponível/indisponível
+
 ## Notas técnicas
 
 | # | Nota |
@@ -99,6 +118,7 @@ horário embutido) no lugar do `activities.xml`.
 | 5 | O `fet-cl` também grava `{base}_data_and_timetable.fet` (`.fet` original com o horário embutido), útil para exportação/interoperabilidade. |
 | 6 | O estágio de build requer `ca-certificates` explicitamente — a imagem `ubuntu:24.04` não o inclui por padrão, o que causa falha de verificação de certificado no `git clone`. |
 | 7 | O estágio de runtime inclui `python3` apenas para viabilizar o smoke test dentro do container; pode ser removido em uma imagem de produção que só expõe o `fet-cl`. |
+| 8 | `Activity_Group_Id = 0` no `.fet` é um valor sentinela para "sem agrupamento", não um ID de grupo real — atividades independentes compartilham esse valor. Agrupar por esse campo sem tratar o `0` como caso especial subestima a carga horária total (validado: 396 em vez de 400 no `Brazil.fet`). |
 
 ## Próximos testes sugeridos
 
