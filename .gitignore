@@ -28,7 +28,6 @@ logs/
 # continuam versionados por causa da negação abaixo.
 grade.html
 entrada.html
-!exemplo_*.html
 
 # --- Build local do FET (Opção A / Linux/WSL) ---
 fet-src/
