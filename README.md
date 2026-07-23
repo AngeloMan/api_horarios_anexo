@@ -1,128 +1,132 @@
-# Kit de teste — Motor FET (Projeto Anexo)
+# API de Horários FET (Projeto Anexo)
 
-Kit de validação de ponta a ponta para a integração com o FET (`fet-cl`):
-build da engine, execução contra um arquivo `.fet` real, parsing do
-resultado e visualização da grade gerada.
+API RESTful e motor assíncrono dockerizado para geração e gestão de horários escolares utilizando a engrenagem **FET (`fet-cl`)**.
 
-Validado contra `Brazil.fet` (16 turmas, 27 professores, 12 disciplinas,
-400 atividades): 400/400 atividades alocadas, status `SUCCESS`, 2
-conflitos soft.
+## 🚀 Arquitetura
 
-## Requisitos
+O projeto utiliza um padrão de **Fila de Tarefas Assíncronas (Task Queue / Job Pattern)** para processar a geração de horários sem bloquear requisições HTTP:
 
-- Docker Desktop (recomendado), **ou**
-- Linux/WSL com `qtbase5-dev` e `qt5-qmake` para build local
-- Python 3.9+ (para os scripts de teste e visualização)
+- **FastAPI** (`web`): Servidor de API RESTful com documentação OpenAPI (`/docs`).
+- **Celery** (`worker`): Worker em segundo plano contendo o binário `fet-cl` compilado para resolver as grades de horário em diretórios temporários isolados.
+- **Redis** (`redis`): Broker de mensagens e cache para o Celery.
+- **PostgreSQL** (`db`): Banco de dados relacional para persistência de registros, status, metadados e artefatos de saída (`activities_xml`, `data_and_timetable.fet`, `soft_conflicts` e `solver_log`).
 
-## Início rápido
+---
 
-**Linux/macOS:**
+## 📂 Estrutura do Repositório
 
-```bash
-docker build -t fet-cl-test .
-docker run --rm -v "$(pwd):/data" fet-cl-test --version
-docker run --rm -v "$(pwd):/data" --entrypoint python3 fet-cl-test \
-    /data/test_fet_pipeline.py /data/Brazil.fet --fet-cl fet-cl
+```text
+api_horarios_anexo/
+├── app/
+│   ├── api/
+│   │   └── endpoints/
+│   │       └── horarios.py      # Endpoints RESTful (POST, GET, download, cancel, etc.)
+│   ├── services/
+│   │   ├── fet_runner.py        # Runner isolado do fet-cl com duplo timeout
+│   │   └── visualizer.py        # Parser de alocações e renderizador HTML
+│   ├── config.py                # Configurações via variáveis de ambiente
+│   ├── database.py              # Conexão SQLAlchemy
+│   ├── main.py                  # Ponto de entrada FastAPI
+│   ├── models.py                # Modelo ORM "Horario" com índices operacionais
+│   ├── schemas.py               # Schemas Pydantic v2
+│   └── worker.py                # Tarefas assíncronas do Celery
+├── scripts/
+│   └── import_horario.py        # CLI de importação direta para o PostgreSQL (sem passar pela fila)
+├── tests/                       # Suíte de testes automatizados (pytest)
+├── Brazil.fet                   # Dataset real de testes (16 turmas, 400 atividades)
+├── Dockerfile                   # Build multi-stage (fet-cl 7.8.5 + Python runtime)
+├── docker-compose.yml           # Orquestração dos containers (web, worker, redis, db)
+└── requirements.txt             # Dependências Python
 ```
 
-**Windows (PowerShell):**
+---
+
+## ⚡ Início Rápido (Docker)
+
+Para subir todos os serviços (`web`, `worker`, `redis`, `db`):
 
 ```powershell
-docker build -t fet-cl-test .
-docker run --rm -v "${PWD}:/data" fet-cl-test --version
-docker run --rm -v "${PWD}:/data" --entrypoint python3 fet-cl-test `
-    /data/test_fet_pipeline.py /data/Brazil.fet --fet-cl fet-cl
+docker compose up --build -d
 ```
 
-> No PowerShell, o volume deve ser passado como uma única string
-> (`-v "${PWD}:/data"`) e a continuação de linha usa acento grave
-> `` ` ``, não `\`.
+### URLs Principais:
 
-## Conteúdo do kit
+- **Swagger UI (Documentação Interativa)**: `http://localhost:8000/docs`
+- **ReDoc**: `http://localhost:8000/redoc`
+- **Health Check**: `http://localhost:8000/`
 
-| Arquivo | Descrição |
-|---|---|
-| `Dockerfile` | Build multi-stage do `fet-cl` (sem GUI); imagem final com Qt Core + Python 3 |
-| `test_fet_pipeline.py` | Smoke test: executa `fet-cl`, parseia o resultado e o diagnóstico de conflitos |
-| `visualize_timetable.py` | Visualização HTML da grade gerada, a partir do `.fet` + saída do `fet-cl` |
-| `visualize_input.py` | Visualização HTML dos dados de entrada do `.fet` (currículo, carga horária, disponibilidade) |
-| `exemplo_grade_Brazil.html` | Visualização de referência da grade gerada |
-| `exemplo_entrada_Brazil.html` | Visualização de referência dos dados de entrada |
-| `Brazil.fet` | Dataset de teste |
+---
 
-## `test_fet_pipeline.py`
+## 📥 Importação Direta via CLI (`scripts/import_horario.py`)
 
-Executa o `fet-cl` em um diretório temporário, valida a alocação das
-atividades e o status da geração. Por padrão não persiste nenhum
-arquivo — é um smoke test, não um gerador de saída.
+Para testar ou importar arquivos `.fet` e relatórios de saída diretamente para o banco de dados PostgreSQL sem passar pela fila do Celery/Redis:
+
+### 1. Execução via Docker (Recomendado)
+
+**Linux / macOS / PowerShell (Linha única):**
 
 ```bash
-python3 test_fet_pipeline.py Brazil.fet --fet-cl <caminho-do-fet-cl> [opções]
+docker compose exec web python3 scripts/import_horario.py --input-fet Brazil.fet --nome "Teste Direto Brazil"
 ```
 
-| Opção | Descrição | Default |
-|---|---|---|
-| `--fet-cl` | Caminho do binário `fet-cl` | busca no `PATH` |
-| `--timeout` | Timeout da geração, em segundos | `60` |
-| `--keep-output <dir>` | Copia a saída completa do `fet-cl` para `<dir>` antes do descarte | não persiste |
-
-Exemplo persistindo a saída (necessário para depois visualizar a grade):
+**PowerShell (Comando multilinha):**
 
 ```powershell
-docker run --rm -v "${PWD}:/data" --entrypoint python3 fet-cl-test `
-    /data/test_fet_pipeline.py /data/Brazil.fet --fet-cl fet-cl --keep-output /data/out
+docker compose exec web python3 scripts/import_horario.py `
+  --input-fet Brazil.fet `
+  --nome "Teste Direto Brazil"
 ```
 
-## `visualize_timetable.py`
+Se você possuir os arquivos de saída gerados (`_activities.xml` ou `_data_and_timetable.fet`):
 
 ```bash
-python3 visualize_timetable.py Brazil.fet out/timetables/Brazil/Brazil_activities.xml -o grade.html
+docker compose exec web python3 scripts/import_horario.py --input-fet Brazil.fet --activities-xml out/timetables/Brazil/Brazil_activities.xml --timetable-fet out/timetables/Brazil/Brazil_data_and_timetable.fet --nome "Importação Completa Brazil"
 ```
 
-Gera um HTML autocontido (sem dependências externas) com duas visões:
-
-- **Por turma** — dias × horários, disciplina + professor por célula
-- **Por professor** — dias × horários, disciplina + turma por célula; nas
-  células sem aula, distingue **Disponível** (sem restrição) de
-  **Indisponível** (bloqueado por `ConstraintTeacherNotAvailableTimes`,
-  com o percentual do peso quando a restrição é parcial)
-
-Também aceita o `*_data_and_timetable.fet` (saída do `fet-cl` com o
-horário embutido) no lugar do `activities.xml`.
-
-## `visualize_input.py`
+### 2. Execução em Ambiente Local (Python)
 
 ```bash
-python3 visualize_input.py Brazil.fet -o entrada.html
+python scripts/import_horario.py --input-fet Brazil.fet --nome "Teste Local"
 ```
 
-Visualiza os dados **de entrada** do `.fet` — não depende de nenhuma
-geração prévia, só do próprio arquivo. Útil para revisar o dataset antes
-de gastar tempo de geração com ele. Duas visões:
+O script retornará o `ID` do registro inserido e as URLs para acesso imediato no navegador:
+```text
+============================================================
+  HORÁRIO IMPORTADO COM SUCESSO NO BANCO DE DADOS!
+============================================================
+  ID do Registro: 4b29c991-88f5-4d32-b7a4-56fa2b0a1d48
+  Nome:          Teste Direto Brazil
+  Status:        SUCCESS
+------------------------------------------------------------
+  Endpoints de Acesso:
+  - Detalhes (JSON):   http://localhost:8000/api/v1/horarios/4b29c991-88f5-4d32-b7a4-56fa2b0a1d48
+  - Grade HTML:        http://localhost:8000/api/v1/horarios/4b29c991-88f5-4d32-b7a4-56fa2b0a1d48/view
+  - Alocações (JSON):  http://localhost:8000/api/v1/horarios/4b29c991-88f5-4d32-b7a4-56fa2b0a1d48/timetable
+============================================================
+```
 
-- **Por turma** — currículo (disciplina, professor, carga semanal) e
-  tabela comparativa de todas as turmas
-- **Por professor** — carga horária (disciplina, turma, carga semanal),
-  restrições declaradas (máx. dias/semana, meta de horas) e a grade de
-  disponibilidade (`ConstraintTeacherNotAvailableTimes`), sem nenhuma
-  aula marcada — só disponível/indisponível
+---
 
-## Notas técnicas
+## 🔌 Principais Endpoints
 
-| # | Nota |
-|---|---|
-| 1 | O mirror `rodolforg/fet` está desatualizado (parado em 5.37.5, 2019) e falha com assertion error ao processar arquivos `.fet` gerados por versões 7.x. Não usar para builds novos. |
-| 2 | O `Dockerfile` usa `bhavyasaggi/fet` (versão 7.8.5), compatível com arquivos `.fet` 7.x. Para produção, considerar buildar a partir do tarball oficial em lalescu.ro/liviu/fet/download.html. |
-| 3 | A sintaxe de seed aleatória mudou na versão 5.44.0: `--randomseedx`/`--randomseedy` foram substituídos por 6 componentes (`--randomseeds1x`/`--randomseeds2x`). Parâmetros antigos abortam a geração. |
-| 4 | O arquivo de saída com as alocações é `{base}_activities.xml`, em `outputdir/timetables/{base}/` — não `activities_timetable.xml`. |
-| 5 | O `fet-cl` também grava `{base}_data_and_timetable.fet` (`.fet` original com o horário embutido), útil para exportação/interoperabilidade. |
-| 6 | O estágio de build requer `ca-certificates` explicitamente — a imagem `ubuntu:24.04` não o inclui por padrão, o que causa falha de verificação de certificado no `git clone`. |
-| 7 | O estágio de runtime inclui `python3` apenas para viabilizar o smoke test dentro do container; pode ser removido em uma imagem de produção que só expõe o `fet-cl`. |
-| 8 | `Activity_Group_Id = 0` no `.fet` é um valor sentinela para "sem agrupamento", não um ID de grupo real — atividades independentes compartilham esse valor. Agrupar por esse campo sem tratar o `0` como caso especial subestima a carga horária total (validado: 396 em vez de 400 no `Brazil.fet`). |
+| Método | Endpoint | Descrição |
+| --- | --- | --- |
+| `POST` | `/api/v1/horarios` | Cria um job a partir de JSON ou upload de arquivo `.fet` (retorna `202 Accepted`). |
+| `POST` | `/api/v1/horarios/{id}/solve` | Re-executa o cálculo para um horário cadastrado. |
+| `POST` | `/api/v1/horarios/{id}/cancel` | Cancela o cálculo de um job (`CANCELLED`). |
+| `GET` | `/api/v1/horarios` | Lista horários com paginação (`page`, `limit`) e filtro por `status`. |
+| `GET` | `/api/v1/horarios/{id}` | Retorna o status, etapa atual (`current_step`) e métricas. |
+| `GET` | `/api/v1/horarios/{id}/xml` | Retorna o arquivo `activities.xml` gravado no banco. |
+| `GET` | `/api/v1/horarios/{id}/timetable` | Retorna as alocações da grade formatadas em JSON. |
+| `GET` | `/api/v1/horarios/{id}/view` | Renderiza a página HTML interativa da grade horária. |
+| `GET` | `/api/v1/horarios/{id}/download` | Baixa os arquivos (`format=xml` para `activities.xml` ou `format=fet` para `data_and_timetable.fet`). |
 
-## Próximos testes sugeridos
+---
 
-1. Testes de contrato do `FetXmlMapper` — gerar `.fet` a partir de dados relacionais sintéticos e validar contra um `.fet` de referência
-2. Cenário de inviabilidade — dataset deliberadamente impossível, validar tratamento de `status=IMPOSSIBLE`
-3. Carga/timeout — dataset sintético grande, validar `--timelimitseconds` e timeout do processo Worker em conjunto
-4. Concorrência — múltiplos jobs simultâneos, validar isolamento de diretórios temporários
+## 🧪 Rodando os Testes
+
+Para executar a suíte de testes dentro do container Docker:
+
+```powershell
+docker compose exec web pytest -v
+```
