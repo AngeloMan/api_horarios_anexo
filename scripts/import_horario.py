@@ -151,6 +151,7 @@ def import_horario(args) -> str:
         print("  Endpoints de Acesso:")
         print(f"  - Detalhes (JSON):   http://localhost:8000/api/v1/horarios/{horario.id}")
         print(f"  - Grade HTML:        http://localhost:8000/api/v1/horarios/{horario.id}/view")
+        print(f"  - Dados de Entrada:  http://localhost:8000/api/v1/horarios/{horario.id}/viewdata")
         print(f"  - Alocações (JSON):  http://localhost:8000/api/v1/horarios/{horario.id}/timetable")
         if horario.activities_xml:
             print(f"  - Download XML:      http://localhost:8000/api/v1/horarios/{horario.id}/download?format=xml")

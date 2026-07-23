@@ -119,6 +119,7 @@ O script retornará o `ID` do registro inserido e as URLs para acesso imediato n
 | `GET` | `/api/v1/horarios/{id}/xml` | Retorna o arquivo `activities.xml` gravado no banco. |
 | `GET` | `/api/v1/horarios/{id}/timetable` | Retorna as alocações da grade formatadas em JSON. |
 | `GET` | `/api/v1/horarios/{id}/view` | Renderiza a página HTML interativa da grade horária. |
+| `GET` | `/api/v1/horarios/{id}/viewdata` | Renderiza a página HTML interativa dos dados de entrada do `.fet` (currículo, carga horária e disponibilidade). |
 | `GET` | `/api/v1/horarios/{id}/download` | Baixa os arquivos (`format=xml` para `activities.xml` ou `format=fet` para `data_and_timetable.fet`). |
 
 ---

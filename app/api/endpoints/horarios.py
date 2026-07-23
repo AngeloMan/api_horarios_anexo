@@ -9,7 +9,7 @@ from app.models import Horario, HorarioStatus, HorarioStep
 from app.schemas import (
     HorarioCreate, HorarioResponse, HorarioListResponse, TimetableResponse
 )
-from app.services.visualizer import parse_allocations, render_html_timetable
+from app.services.visualizer import parse_allocations, render_html_timetable, render_html_input_data
 
 router = APIRouter(prefix="/horarios", tags=["Horários"])
 
@@ -208,13 +208,32 @@ def get_horario_timetable(id: str, db: Session = Depends(get_db)):
 
 @router.get("/{id}/view", response_class=HTMLResponse)
 def get_horario_view(id: str, db: Session = Depends(get_db)):
-    """Retorna a visualização HTML interativa da grade horária."""
+    """Retorna a visualização HTML interativa da grade horária (Por Turma / Por Professor)."""
     horario = db.query(Horario).filter(Horario.id == id).first()
     if not horario:
         raise HTTPException(status_code=404, detail="Horário não encontrado")
 
-    allocations = parse_allocations(horario.fet_data, horario.activities_xml)
-    html_content = render_html_timetable(horario.nome or horario.id, allocations)
+    html_content = render_html_timetable(
+        horario_nome=horario.nome or horario.id,
+        fet_xml=horario.fet_data,
+        activities_xml=horario.activities_xml,
+        output_fet=horario.output_fet
+    )
+    return HTMLResponse(content=html_content)
+
+
+@router.get("/{id}/viewdata", response_class=HTMLResponse)
+@router.get("/{id}/view-input", response_class=HTMLResponse)
+def get_horario_viewdata(id: str, db: Session = Depends(get_db)):
+    """Retorna a visualização HTML dos dados de entrada do .fet (currículo, disponibilidade, turmas, carga horária)."""
+    horario = db.query(Horario).filter(Horario.id == id).first()
+    if not horario:
+        raise HTTPException(status_code=404, detail="Horário não encontrado")
+
+    html_content = render_html_input_data(
+        horario_nome=horario.nome or horario.id,
+        fet_xml=horario.fet_data
+    )
     return HTMLResponse(content=html_content)
 
 
